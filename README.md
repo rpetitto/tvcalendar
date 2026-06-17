@@ -56,8 +56,29 @@ app/src/main/java/com/rpetitto/tvcalendar/
 
 The app shows a pairing screen with a user code and a QR of the verification URL.
 On your phone, visit the URL, enter the code, and approve the read-only Calendar
-scope. The TV then switches to the ambient calendar display and keeps itself in
-sync every 15 minutes.
+scope. The TV then switches to the calendar and keeps itself in sync every 15
+minutes.
+
+## Using the remote
+
+The app opens in **Week** view with **today** focused. Then:
+
+- D-pad ◀ ▶ — move day by day (auto-advances to next/previous week)
+- D-pad ▲ ▼ — move week by week
+- **Select / Enter** — open that day in **Agenda** view
+- **Back** — return to the previous view (Agenda → Week, Month → Week)
+
+The tabs at the top right (**Week / Month / Agenda**) are focusable; press ▲
+from the date grid to highlight them, ◀ ▶ to pick a view, **Select** to switch.
+
+## Screensaver
+
+The app registers a **Daydream** screensaver: a slow clock plus the next three
+events of the day, drawn from cached data (no network needed).
+
+To enable on your TV: **Settings → Display & Sound → Screensaver** (path varies
+by TV) → pick **TV Calendar**. The system will start it when the TV is idle,
+and exit it on the next remote press.
 
 ## Notes
 

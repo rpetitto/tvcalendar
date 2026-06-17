@@ -86,7 +86,13 @@ fun TVCalendarApp(viewModel: MainViewModel) {
             if (calendarState.isLoading && calendarState.dayEvents.isEmpty()) {
                 LoadingScreen()
             } else {
-                CalendarScreen(state = calendarState)
+                CalendarScreen(
+                    state = calendarState,
+                    onViewSelected = viewModel::setView,
+                    onFocusDate = viewModel::setFocusedDate,
+                    onActivateDate = viewModel::openAgenda,
+                    onBack = viewModel::onBackPressed,
+                )
             }
         }
         is MainViewModel.AuthState.Error -> ErrorScreen(state.message)

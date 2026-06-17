@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Metadata for CalendarDaydream — used by the system to show a description in
+     Settings → Display → Screensaver. -->
+<dream xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.rpetitto.tvcalendar/.MainActivity" />

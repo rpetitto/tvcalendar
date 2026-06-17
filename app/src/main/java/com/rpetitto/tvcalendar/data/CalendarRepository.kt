@@ -114,12 +114,29 @@ class CalendarRepository(
         return eventDao.getEventsInRange(start, end)
     }
 
-    fun observeEventsForWeek(weekStart: LocalDate): Flow<Map<LocalDate, List<EventEntity>>> {
-        val start = weekStart.atStartOfDay(zoneId).toInstant().toEpochMilli()
-        val end = weekStart.plusDays(7).atStartOfDay(zoneId).toInstant().toEpochMilli()
+    fun observeEventsForWeek(weekStart: LocalDate): Flow<Map<LocalDate, List<EventEntity>>> =
+        observeEventsByDay(weekStart, 7)
+
+    /**
+     * Observes events for a calendar month's visible grid: always 42 days (6
+     * weeks), starting on the Sunday on or before the 1st of the month.
+     */
+    fun observeEventsForMonth(month: LocalDate): Flow<Map<LocalDate, List<EventEntity>>> {
+        val firstOfMonth = month.withDayOfMonth(1)
+        val gridStart = firstOfMonth.with(java.time.temporal.TemporalAdjusters
+            .previousOrSame(java.time.DayOfWeek.SUNDAY))
+        return observeEventsByDay(gridStart, 42)
+    }
+
+    private fun observeEventsByDay(
+        startDay: LocalDate,
+        dayCount: Int,
+    ): Flow<Map<LocalDate, List<EventEntity>>> {
+        val start = startDay.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val end = startDay.plusDays(dayCount.toLong()).atStartOfDay(zoneId).toInstant().toEpochMilli()
         return eventDao.getEventsInRange(start, end).map { events ->
-            val days = (0 until 7).associate { offset ->
-                weekStart.plusDays(offset.toLong()) to mutableListOf<EventEntity>()
+            val days = (0 until dayCount).associate { offset ->
+                startDay.plusDays(offset.toLong()) to mutableListOf<EventEntity>()
             }
             for (event in events) {
                 // An event can span multiple days; add it to each day it touches.
@@ -202,7 +219,8 @@ class CalendarRepository(
 
     companion object {
         private const val TAG = "CalendarRepository"
-        private const val SYNC_WINDOW_DAYS = 14L
+        // Cover today + 6 weeks so the Month view's grid always has data.
+        private const val SYNC_WINDOW_DAYS = 45L
 
         /** Builds a repository with default wiring from an app [Context]. */
         fun create(context: Context): CalendarRepository {

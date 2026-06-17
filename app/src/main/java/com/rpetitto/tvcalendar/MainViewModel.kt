@@ -8,7 +8,8 @@ import com.rpetitto.tvcalendar.auth.DeviceCodeResponse
 import com.rpetitto.tvcalendar.auth.DeviceFlowAuth
 import com.rpetitto.tvcalendar.auth.TokenStore
 import com.rpetitto.tvcalendar.data.CalendarRepository
-import com.rpetitto.tvcalendar.ui.screens.CalendarUiState
+import com.rpetitto.tvcalendar.ui.CalendarUiState
+import com.rpetitto.tvcalendar.ui.CalendarView
 import com.rpetitto.tvcalendar.worker.SyncScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -26,7 +27,7 @@ import java.time.temporal.TemporalAdjusters
 /** App-level state holder: drives auth flow and feeds the calendar UI. */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
-    /** High-level navigation state for the app. */
+    /** High-level auth navigation state. */
     sealed interface AuthState {
         data object NeedsAuth : AuthState
         data class Pairing(val deviceCode: DeviceCodeResponse) : AuthState
@@ -44,7 +45,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _calendarState = MutableStateFlow(CalendarUiState())
     val calendarState: StateFlow<CalendarUiState> = _calendarState.asStateFlow()
 
-    private val today = MutableStateFlow(LocalDate.now())
+    /** Drives event-observation: emits whenever the focused day changes. */
+    private val focusDate = MutableStateFlow(LocalDate.now())
+
+    /** Tracks which view the user came from so Back returns there. */
+    private var previousView: CalendarView = CalendarView.Week
     private var eventsJob: Job? = null
     private var lastPausedAt: Long = 0L
 
@@ -57,7 +62,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         observeMidnight()
     }
 
-    /** Begins the OAuth Device Flow: request a code, then poll for the token. */
+    // --- Auth -------------------------------------------------------------
+
     fun startPairing() {
         val clientId = BuildConfig.GOOGLE_CLIENT_ID
         val clientSecret = BuildConfig.GOOGLE_CLIENT_SECRET
@@ -120,51 +126,111 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // --- Event observation -----------------------------------------------
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeEvents() {
         eventsJob?.cancel()
         eventsJob = viewModelScope.launch {
-            today.flatMapLatest { day ->
-                val weekStart = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+            focusDate.flatMapLatest { focus ->
+                val weekStart = focus.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
                 combine(
-                    repository.observeEventsForDay(day),
+                    repository.observeEventsForDay(focus),
                     repository.observeEventsForWeek(weekStart),
-                ) { dayEvents, weekEvents ->
-                    Triple(day, dayEvents, weekEvents) to weekStart
+                    repository.observeEventsForMonth(focus),
+                ) { dayEvents, weekEvents, monthEvents ->
+                    EventSnapshot(focus, dayEvents, weekEvents, monthEvents)
                 }
-            }.collect { (triple, weekStart) ->
-                val (day, dayEvents, weekEvents) = triple
+            }.collect { snap ->
                 _calendarState.update {
                     it.copy(
-                        today = day,
-                        weekStart = weekStart,
-                        dayEvents = dayEvents,
-                        weekEvents = weekEvents,
+                        dayEvents = snap.dayEvents,
+                        weekEvents = snap.weekEvents,
+                        monthEvents = snap.monthEvents,
                     )
                 }
             }
         }
     }
 
+    private data class EventSnapshot(
+        val focus: LocalDate,
+        val dayEvents: List<com.rpetitto.tvcalendar.data.local.EventEntity>,
+        val weekEvents: Map<LocalDate, List<com.rpetitto.tvcalendar.data.local.EventEntity>>,
+        val monthEvents: Map<LocalDate, List<com.rpetitto.tvcalendar.data.local.EventEntity>>,
+    )
+
     private fun observeMidnight() {
         viewModelScope.launch {
             repository.midnightTicks().collect {
-                today.value = LocalDate.now()
+                rollToToday()
             }
         }
     }
 
-    /** Called from the activity's per-minute tick; cheaply guards day rollover. */
+    private fun rollToToday() {
+        val now = LocalDate.now()
+        _calendarState.update { it.copy(today = now) }
+        // If the user is still on today's agenda, advance that too.
+        if (_calendarState.value.agendaDate.isBefore(now)) {
+            _calendarState.update { it.copy(agendaDate = now) }
+        }
+    }
+
+    // --- Navigation -------------------------------------------------------
+
+    fun setView(view: CalendarView) {
+        val current = _calendarState.value.view
+        if (current == view) return
+        previousView = current
+        _calendarState.update { it.copy(view = view) }
+    }
+
+    /** D-pad-driven day focus in Week/Month. Cheap; also drives event window. */
+    fun setFocusedDate(date: LocalDate) {
+        _calendarState.update { it.copy(focusedDate = date) }
+        focusDate.value = date
+    }
+
+    /** Open Agenda for a specific day (from Week/Month "select"). */
+    fun openAgenda(date: LocalDate) {
+        previousView = _calendarState.value.view
+        _calendarState.update {
+            it.copy(view = CalendarView.Agenda, agendaDate = date, focusedDate = date)
+        }
+        focusDate.value = date
+    }
+
+    /**
+     * Handle a Back press. Returns true if the press was consumed (caller stays
+     * in-app), false if the activity should be allowed to finish.
+     */
+    fun onBackPressed(): Boolean {
+        val state = _calendarState.value
+        return when (state.view) {
+            CalendarView.Agenda -> {
+                _calendarState.update { it.copy(view = previousView) }
+                true
+            }
+            CalendarView.Month -> {
+                _calendarState.update { it.copy(view = CalendarView.Week) }
+                true
+            }
+            CalendarView.Week -> false
+        }
+    }
+
+    // --- Lifecycle hooks --------------------------------------------------
+
     fun onMinuteTick() {
         val current = LocalDate.now()
-        if (current != today.value) today.value = current
+        if (current != _calendarState.value.today) rollToToday()
     }
 
     fun onPaused() {
         lastPausedAt = System.currentTimeMillis()
     }
 
-    /** On resume after a long background gap, refresh before showing stale data. */
     fun onResumed() {
         if (_authState.value !is AuthState.Authenticated) return
         val gap = System.currentTimeMillis() - lastPausedAt
