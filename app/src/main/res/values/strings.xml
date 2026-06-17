@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TV Calendar</string>
+
+    <!-- Pairing screen -->
+    <string name="pairing_instruction">Visit %1$s on your phone and enter this code</string>
+    <string name="pairing_waiting">Waiting for authorization…</string>
+    <string name="pairing_title">Connect your Google Calendar</string>
+    <string name="pairing_error">Something went wrong. Please try again.</string>
+
+    <!-- Loading -->
+    <string name="loading">Loading your calendar…</string>
+
+    <!-- Calendar screen -->
+    <string name="calendar_primary">My Calendar</string>
+    <string name="agenda_empty">No more events today</string>
+    <string name="agenda_no_events">Nothing scheduled</string>
+    <string name="all_day">All day</string>
+
+    <!-- Errors -->
+    <string name="error_generic">Unable to load calendar</string>
+    <string name="error_auth">Authentication failed. Please reconnect.</string>
+    <string name="retry">Retry</string>
+</resources>

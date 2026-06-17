@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      A fullscreen, no-action-bar theme for the ambient TV display. Named
+      "Theme.Leanback" to match the project convention; defined locally so the
+      app does not need to depend on the androidx.leanback library.
+    -->
+    <style name="Theme.Leanback" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/ambient_background</item>
+        <item name="android:colorBackground">@color/ambient_background</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
